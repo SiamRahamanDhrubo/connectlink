@@ -82,7 +82,7 @@ const Index = () => {
             .from('conversation_participants')
             .select(`
               user_id,
-              profiles!conversation_participants_user_id_fkey(display_name, avatar_url)
+              profiles:user_id(display_name, avatar_url)
             `)
             .eq('conversation_id', conv.id)
             .neq('user_id', user.id);

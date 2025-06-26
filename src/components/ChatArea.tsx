@@ -37,7 +37,7 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
           content,
           created_at,
           sender_id,
-          profiles!messages_sender_id_fkey(display_name, avatar_url)
+          profiles:sender_id(display_name, avatar_url)
         `)
         .eq('conversation_id', chat.conversation_id)
         .order('created_at', { ascending: true });
