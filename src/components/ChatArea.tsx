@@ -3,6 +3,10 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Phone, Video, MoreVertical, Smile } from "lucide-react";
 import { Chat, Message } from "@/pages/Index";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface ChatAreaProps {
   chat: Chat;
@@ -10,30 +14,42 @@ interface ChatAreaProps {
 
 export const ChatArea = ({ chat }: ChatAreaProps) => {
   const [newMessage, setNewMessage] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      text: "Hey! How's your day going?",
-      timestamp: "2:34 PM",
-      isOwn: false,
-      avatar: chat.avatar
-    },
-    {
-      id: "2", 
-      text: "It's going great! Just finished the new ConnectLink features. The interface is looking amazing! 🚀",
-      timestamp: "2:35 PM",
-      isOwn: true
-    },
-    {
-      id: "3",
-      text: "That's awesome! Can't wait to see what you've built. ConnectLink is going to be revolutionary!",
-      timestamp: "2:36 PM", 
-      isOwn: false,
-      avatar: chat.avatar
-    }
-  ]);
-  
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch messages for the current conversation
+  const { data: messages = [], isLoading } = useQuery({
+    queryKey: ['messages', chat.conversation_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select(`
+          *,
+          profiles!messages_sender_id_fkey(display_name, avatar_url)
+        `)
+        .eq('conversation_id', chat.conversation_id)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching messages:', error);
+        return [];
+      }
+
+      return data.map((msg): Message => ({
+        id: msg.id,
+        text: msg.content,
+        timestamp: new Date(msg.created_at).toLocaleTimeString([], { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
+        isOwn: msg.sender_id === user?.id,
+        avatar: msg.profiles?.avatar_url,
+        sender_id: msg.sender_id
+      }));
+    },
+    enabled: !!chat.conversation_id && !!user,
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,16 +59,68 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      const message: Message = {
-        id: Date.now().toString(),
-        text: newMessage,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isOwn: true
-      };
-      setMessages([...messages, message]);
+  // Set up real-time subscription for new messages
+  useEffect(() => {
+    if (!chat.conversation_id) return;
+
+    const channel = supabase
+      .channel(`messages:${chat.conversation_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${chat.conversation_id}`,
+        },
+        (payload) => {
+          console.log('New message received:', payload);
+          // Invalidate and refetch messages
+          queryClient.invalidateQueries({ 
+            queryKey: ['messages', chat.conversation_id] 
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [chat.conversation_id, queryClient]);
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !user) return;
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: chat.conversation_id,
+          sender_id: user.id,
+          content: newMessage.trim()
+        });
+
+      if (error) {
+        console.error('Error sending message:', error);
+        toast.error('Failed to send message');
+        return;
+      }
+
       setNewMessage("");
+      
+      // Invalidate messages query to refetch
+      queryClient.invalidateQueries({ 
+        queryKey: ['messages', chat.conversation_id] 
+      });
+      
+      // Also invalidate conversations to update last message
+      queryClient.invalidateQueries({ 
+        queryKey: ['conversations', user.id] 
+      });
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message');
     }
   };
 
@@ -62,6 +130,25 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
       handleSendMessage();
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-4 bg-slate-800 border-b border-slate-700">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-slate-700 rounded-full animate-pulse"></div>
+            <div>
+              <div className="w-24 h-4 bg-slate-700 rounded animate-pulse mb-1"></div>
+              <div className="w-16 h-3 bg-slate-700 rounded animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-slate-400">Loading messages...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -101,32 +188,41 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={cn(
-              "flex",
-              message.isOwn ? "justify-end" : "justify-start"
-            )}
-          >
-            <div
-              className={cn(
-                "max-w-[70%] px-4 py-2 rounded-2xl shadow-lg",
-                message.isOwn
-                  ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-br-md"
-                  : "bg-slate-700 text-white rounded-bl-md"
-              )}
-            >
-              <p className="text-sm leading-relaxed">{message.text}</p>
-              <p className={cn(
-                "text-xs mt-1",
-                message.isOwn ? "text-blue-100" : "text-slate-400"
-              )}>
-                {message.timestamp}
-              </p>
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-slate-400">
+            <div className="text-center">
+              <p className="mb-2">No messages yet</p>
+              <p className="text-sm">Start the conversation!</p>
             </div>
           </div>
-        ))}
+        ) : (
+          messages.map((message) => (
+            <div
+              key={message.id}
+              className={cn(
+                "flex",
+                message.isOwn ? "justify-end" : "justify-start"
+              )}
+            >
+              <div
+                className={cn(
+                  "max-w-[70%] px-4 py-2 rounded-2xl shadow-lg",
+                  message.isOwn
+                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-br-md"
+                    : "bg-slate-700 text-white rounded-bl-md"
+                )}
+              >
+                <p className="text-sm leading-relaxed">{message.text}</p>
+                <p className={cn(
+                  "text-xs mt-1",
+                  message.isOwn ? "text-blue-100" : "text-slate-400"
+                )}>
+                  {message.timestamp}
+                </p>
+              </div>
+            </div>
+          ))
+        )}
         <div ref={messagesEndRef} />
       </div>
 
