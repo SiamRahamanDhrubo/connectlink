@@ -1,12 +1,10 @@
 
-import { useState, useRef, useEffect } from "react";
-import { Send, Phone, Video, MoreVertical, Smile } from "lucide-react";
-import { Chat, Message } from "@/pages/Index";
-import { cn } from "@/lib/utils";
+import { useState, useEffect, useRef } from "react";
+import { Send, MoreVertical, Phone, Video } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Chat, Message } from "@/pages/Index";
 
 interface ChatAreaProps {
   chat: Chat;
@@ -14,18 +12,31 @@ interface ChatAreaProps {
 
 export const ChatArea = ({ chat }: ChatAreaProps) => {
   const [newMessage, setNewMessage] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch messages for the current conversation
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, []);
+
+  // Fetch messages for the selected conversation
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ['messages', chat.conversation_id],
     queryFn: async () => {
+      if (!user) return [];
+      
       const { data, error } = await supabase
         .from('messages')
         .select(`
-          *,
+          id,
+          content,
+          created_at,
+          sender_id,
           profiles!messages_sender_id_fkey(display_name, avatar_url)
         `)
         .eq('conversation_id', chat.conversation_id)
@@ -36,187 +47,135 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
         return [];
       }
 
-      return data.map((msg): Message => ({
+      // Transform data to match Message interface
+      const transformedMessages: Message[] = data.map((msg) => ({
         id: msg.id,
         text: msg.content,
-        timestamp: new Date(msg.created_at).toLocaleTimeString([], { 
-          hour: '2-digit', 
-          minute: '2-digit' 
-        }),
-        isOwn: msg.sender_id === user?.id,
-        avatar: msg.profiles?.avatar_url,
+        timestamp: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isOwn: msg.sender_id === user.id,
+        avatar: msg.profiles?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face',
         sender_id: msg.sender_id
       }));
+
+      return transformedMessages;
     },
-    enabled: !!chat.conversation_id && !!user,
+    enabled: !!user && !!chat.conversation_id,
   });
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Send message mutation
+  const sendMessageMutation = useMutation({
+    mutationFn: async (content: string) => {
+      if (!user) throw new Error('User not authenticated');
+      
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: chat.conversation_id,
+          sender_id: user.id,
+          content: content
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages', chat.conversation_id] });
+      queryClient.invalidateQueries({ queryKey: ['conversations', user?.id] });
+    },
+  });
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newMessage.trim() && user) {
+      sendMessageMutation.mutate(newMessage.trim());
+      setNewMessage("");
+    }
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Set up real-time subscription for new messages
-  useEffect(() => {
-    if (!chat.conversation_id) return;
-
-    const channel = supabase
-      .channel(`messages:${chat.conversation_id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${chat.conversation_id}`,
-        },
-        (payload) => {
-          console.log('New message received:', payload);
-          // Invalidate and refetch messages
-          queryClient.invalidateQueries({ 
-            queryKey: ['messages', chat.conversation_id] 
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [chat.conversation_id, queryClient]);
-
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || !user) return;
-
-    try {
-      const { error } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: chat.conversation_id,
-          sender_id: user.id,
-          content: newMessage.trim()
-        });
-
-      if (error) {
-        console.error('Error sending message:', error);
-        toast.error('Failed to send message');
-        return;
-      }
-
-      setNewMessage("");
-      
-      // Invalidate messages query to refetch
-      queryClient.invalidateQueries({ 
-        queryKey: ['messages', chat.conversation_id] 
-      });
-      
-      // Also invalidate conversations to update last message
-      queryClient.invalidateQueries({ 
-        queryKey: ['conversations', user.id] 
-      });
-      
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error('Failed to send message');
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
   if (isLoading) {
     return (
-      <div className="flex flex-col h-full">
-        <div className="p-4 bg-slate-800 border-b border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-slate-700 rounded-full animate-pulse"></div>
-            <div>
-              <div className="w-24 h-4 bg-slate-700 rounded animate-pulse mb-1"></div>
-              <div className="w-16 h-3 bg-slate-700 rounded animate-pulse"></div>
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-slate-400">Loading messages...</div>
+      <div className="flex-1 flex items-center justify-center bg-slate-800">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400">Loading messages...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex-1 flex flex-col bg-slate-800">
       {/* Chat Header */}
-      <div className="p-4 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+      <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-900">
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <img
-              src={chat.avatar}
-              alt={chat.name}
-              className="w-10 h-10 rounded-full object-cover"
-            />
-            {chat.isOnline && (
-              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-slate-800 rounded-full"></div>
-            )}
-          </div>
+          <img
+            src={chat.avatar}
+            alt={chat.name}
+            className="w-10 h-10 rounded-full object-cover"
+          />
           <div>
             <h2 className="font-semibold text-white">{chat.name}</h2>
             <p className="text-sm text-slate-400">
-              {chat.isOnline ? "Online" : "Last seen recently"}
+              {chat.isOnline ? "Active now" : "Last seen recently"}
             </p>
           </div>
         </div>
-        
         <div className="flex items-center gap-2">
           <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
-            <Phone className="w-5 h-5" />
+            <Phone className="w-5 h-5 text-slate-400" />
           </button>
           <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
-            <Video className="w-5 h-5" />
+            <Video className="w-5 h-5 text-slate-400" />
           </button>
           <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
-            <MoreVertical className="w-5 h-5" />
+            <MoreVertical className="w-5 h-5 text-slate-400" />
           </button>
         </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-slate-400">
+          <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <p className="mb-2">No messages yet</p>
-              <p className="text-sm">Start the conversation!</p>
+              <p className="text-slate-400 mb-2">No messages yet</p>
+              <p className="text-sm text-slate-500">Start the conversation!</p>
             </div>
           </div>
         ) : (
           messages.map((message) => (
             <div
               key={message.id}
-              className={cn(
-                "flex",
-                message.isOwn ? "justify-end" : "justify-start"
-              )}
+              className={`flex gap-3 ${
+                message.isOwn ? "flex-row-reverse" : ""
+              }`}
             >
+              {!message.isOwn && (
+                <img
+                  src={message.avatar}
+                  alt="Avatar"
+                  className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                />
+              )}
               <div
-                className={cn(
-                  "max-w-[70%] px-4 py-2 rounded-2xl shadow-lg",
+                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
                   message.isOwn
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-br-md"
+                    ? "bg-blue-500 text-white rounded-br-md"
                     : "bg-slate-700 text-white rounded-bl-md"
-                )}
+                }`}
               >
-                <p className="text-sm leading-relaxed">{message.text}</p>
-                <p className={cn(
-                  "text-xs mt-1",
-                  message.isOwn ? "text-blue-100" : "text-slate-400"
-                )}>
+                <p className="text-sm">{message.text}</p>
+                <p
+                  className={`text-xs mt-1 ${
+                    message.isOwn ? "text-blue-100" : "text-slate-400"
+                  }`}
+                >
                   {message.timestamp}
                 </p>
               </div>
@@ -227,37 +186,25 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
       </div>
 
       {/* Message Input */}
-      <div className="p-4 bg-slate-800 border-t border-slate-700">
+      <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-700">
         <div className="flex items-center gap-3">
-          <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
-            <Smile className="w-5 h-5 text-slate-400" />
-          </button>
-          
-          <div className="flex-1 relative">
-            <textarea
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Type a message..."
-              rows={1}
-              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-white placeholder-slate-400"
-            />
-          </div>
-          
+          <input
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            placeholder="Type a message..."
+            className="flex-1 bg-slate-700 border border-slate-600 rounded-full px-4 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={sendMessageMutation.isPending}
+          />
           <button
-            onClick={handleSendMessage}
-            disabled={!newMessage.trim()}
-            className={cn(
-              "p-3 rounded-xl transition-all duration-200",
-              newMessage.trim()
-                ? "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg"
-                : "bg-slate-700 text-slate-400 cursor-not-allowed"
-            )}
+            type="submit"
+            disabled={!newMessage.trim() || sendMessageMutation.isPending}
+            className="bg-blue-500 hover:bg-blue-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white p-2 rounded-full transition-colors"
           >
             <Send className="w-5 h-5" />
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 };

@@ -81,7 +81,8 @@ const Index = () => {
           const { data: participantsData } = await supabase
             .from('conversation_participants')
             .select(`
-              profiles!inner(display_name, avatar_url)
+              user_id,
+              profiles!conversation_participants_user_id_fkey(display_name, avatar_url)
             `)
             .eq('conversation_id', conv.id)
             .neq('user_id', user.id);
