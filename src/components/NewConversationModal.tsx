@@ -4,10 +4,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { UserDiscovery } from "./UserDiscovery";
 
 interface NewConversationModalProps {
   open: boolean;
@@ -23,25 +25,15 @@ export const NewConversationModal = ({ open, onOpenChange }: NewConversationModa
 
   const handleCreateConversation = async () => {
     if (!user || !userEmail.trim()) {
-      toast.error("Please enter a user email");
+      toast.error("Please enter a user ID");
       return;
     }
 
     setIsLoading(true);
     try {
-      // First, we need to find users by their email through auth.users
-      // Since we can't directly query auth.users, we'll search through profiles
-      // that were created when users signed up
-      const { data: targetUserProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, display_name')
-        .ilike('id', `%${userEmail}%`) // This won't work for email search
-        .limit(1);
-
-      // Since we can't search by email in profiles directly, let's try a different approach
-      // We'll create the conversation and let the user input a valid user ID instead
+      // Validate UUID format
       if (!userEmail.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-        toast.error("Please enter a valid user ID (UUID format). Email search is not yet implemented.");
+        toast.error("Please enter a valid user ID (UUID format)");
         setIsLoading(false);
         return;
       }
@@ -95,53 +87,73 @@ export const NewConversationModal = ({ open, onOpenChange }: NewConversationModa
     }
   };
 
+  const handleUserSelected = () => {
+    onOpenChange(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] bg-slate-800 border-slate-700">
+      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-hidden bg-slate-800 border-slate-700">
         <DialogHeader>
           <DialogTitle className="text-white">Start New Conversation</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="user-id" className="text-white">User ID</Label>
-            <Input
-              id="user-id"
-              placeholder="Enter user ID (UUID format)"
-              value={userEmail}
-              onChange={(e) => setUserEmail(e.target.value)}
-              className="bg-slate-700 border-slate-600 text-white"
-            />
-            <p className="text-xs text-slate-400">
-              Enter the UUID of the user you want to chat with. You can find this in their profile.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="conversation-name" className="text-white">Conversation Name (Optional)</Label>
-            <Input
-              id="conversation-name"
-              placeholder="Enter conversation name"
-              value={conversationName}
-              onChange={(e) => setConversationName(e.target.value)}
-              className="bg-slate-700 border-slate-600 text-white"
-            />
-          </div>
-        </div>
-        <div className="flex justify-end space-x-2">
-          <Button 
-            variant="outline" 
-            onClick={() => onOpenChange(false)}
-            className="border-slate-600 text-slate-300 hover:bg-slate-700"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleCreateConversation}
-            disabled={isLoading || !userEmail.trim()}
-            className="bg-blue-500 hover:bg-blue-600"
-          >
-            {isLoading ? "Creating..." : "Create"}
-          </Button>
-        </div>
+        
+        <Tabs defaultValue="discover" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 bg-slate-700">
+            <TabsTrigger value="discover" className="text-slate-300 data-[state=active]:text-white">
+              Discover Users
+            </TabsTrigger>
+            <TabsTrigger value="manual" className="text-slate-300 data-[state=active]:text-white">
+              Manual Add
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="discover" className="max-h-[400px] overflow-y-auto">
+            <UserDiscovery onUserSelected={handleUserSelected} />
+          </TabsContent>
+          
+          <TabsContent value="manual" className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="user-id" className="text-white">User ID</Label>
+              <Input
+                id="user-id"
+                placeholder="Enter user ID (UUID format)"
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
+              <p className="text-xs text-slate-400">
+                Enter the UUID of the user you want to chat with. You can find this in their profile.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="conversation-name" className="text-white">Conversation Name (Optional)</Label>
+              <Input
+                id="conversation-name"
+                placeholder="Enter conversation name"
+                value={conversationName}
+                onChange={(e) => setConversationName(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button 
+                variant="outline" 
+                onClick={() => onOpenChange(false)}
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleCreateConversation}
+                disabled={isLoading || !userEmail.trim()}
+                className="bg-blue-500 hover:bg-blue-600"
+              >
+                {isLoading ? "Creating..." : "Create"}
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

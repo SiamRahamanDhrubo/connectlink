@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { Send, MoreVertical, Phone, Video } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,11 +27,42 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
     scrollToBottom();
   }, []);
 
+  // Set up real-time subscription for messages
+  useEffect(() => {
+    if (!user || !chat.conversation_id) return;
+
+    console.log('Setting up real-time subscription for conversation:', chat.conversation_id);
+
+    const channel = supabase
+      .channel(`messages-${chat.conversation_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${chat.conversation_id}`
+        },
+        (payload) => {
+          console.log('New message received:', payload);
+          queryClient.invalidateQueries({ queryKey: ['messages', chat.conversation_id] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [user, chat.conversation_id, queryClient]);
+
   // Fetch messages for the selected conversation
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ['messages', chat.conversation_id],
     queryFn: async () => {
       if (!user) return [];
+      
+      console.log('Fetching messages for conversation:', chat.conversation_id);
       
       const { data, error } = await supabase
         .from('messages')
@@ -50,6 +82,8 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
 
       // Get profiles for all unique sender IDs
       const senderIds = [...new Set(data.map(msg => msg.sender_id))];
+      if (senderIds.length === 0) return [];
+
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, display_name, avatar_url')
@@ -74,6 +108,7 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
         };
       });
 
+      console.log('Fetched messages:', transformedMessages.length);
       return transformedMessages;
     },
     enabled: !!user && !!chat.conversation_id,
@@ -83,6 +118,8 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
       if (!user) throw new Error('User not authenticated');
+      
+      console.log('Sending message to conversation:', chat.conversation_id);
       
       const { data, error } = await supabase
         .from('messages')
@@ -94,13 +131,21 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error sending message:', error);
+        throw error;
+      }
+      
+      console.log('Message sent successfully:', data);
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messages', chat.conversation_id] });
       queryClient.invalidateQueries({ queryKey: ['conversations', user?.id] });
     },
+    onError: (error) => {
+      console.error('Failed to send message:', error);
+    }
   });
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -240,6 +285,11 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
               <Send className="w-5 h-5" />
             </button>
           </div>
+          {sendMessageMutation.isError && (
+            <p className="text-red-400 text-sm mt-2">
+              Failed to send message. Please try again.
+            </p>
+          )}
         </form>
       </div>
 
