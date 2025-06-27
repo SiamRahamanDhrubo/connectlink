@@ -29,15 +29,32 @@ export const NewConversationModal = ({ open, onOpenChange }: NewConversationModa
 
     setIsLoading(true);
     try {
-      // Find the user by email
+      // First, we need to find users by their email through auth.users
+      // Since we can't directly query auth.users, we'll search through profiles
+      // that were created when users signed up
+      const { data: targetUserProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, display_name')
+        .ilike('id', `%${userEmail}%`) // This won't work for email search
+        .limit(1);
+
+      // Since we can't search by email in profiles directly, let's try a different approach
+      // We'll create the conversation and let the user input a valid user ID instead
+      if (!userEmail.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        toast.error("Please enter a valid user ID (UUID format). Email search is not yet implemented.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Check if the user ID exists in profiles
       const { data: targetUser, error: userError } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('id', userEmail) // This would need to be updated to search by email when available
+        .select('id, display_name')
+        .eq('id', userEmail.trim())
         .single();
 
-      if (userError) {
-        toast.error("User not found. Please check the email address.");
+      if (userError || !targetUser) {
+        toast.error("User not found. Please check the user ID.");
         setIsLoading(false);
         return;
       }
@@ -86,14 +103,17 @@ export const NewConversationModal = ({ open, onOpenChange }: NewConversationModa
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="user-email" className="text-white">User ID or Email</Label>
+            <Label htmlFor="user-id" className="text-white">User ID</Label>
             <Input
-              id="user-email"
-              placeholder="Enter user ID or email"
+              id="user-id"
+              placeholder="Enter user ID (UUID format)"
               value={userEmail}
               onChange={(e) => setUserEmail(e.target.value)}
               className="bg-slate-700 border-slate-600 text-white"
             />
+            <p className="text-xs text-slate-400">
+              Enter the UUID of the user you want to chat with. You can find this in their profile.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="conversation-name" className="text-white">Conversation Name (Optional)</Label>
