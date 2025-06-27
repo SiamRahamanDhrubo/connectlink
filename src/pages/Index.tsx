@@ -80,14 +80,20 @@ const Index = () => {
           // Get other participants to determine chat name and avatar
           const { data: participantsData } = await supabase
             .from('conversation_participants')
-            .select(`
-              user_id,
-              profiles:user_id(display_name, avatar_url)
-            `)
+            .select('user_id')
             .eq('conversation_id', conv.id)
             .neq('user_id', user.id);
 
-          const otherParticipant = participantsData?.[0]?.profiles;
+          let otherParticipant = null;
+          if (participantsData && participantsData.length > 0) {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('display_name, avatar_url')
+              .eq('id', participantsData[0].user_id)
+              .single();
+            
+            otherParticipant = profileData;
+          }
           
           return {
             id: conv.id,

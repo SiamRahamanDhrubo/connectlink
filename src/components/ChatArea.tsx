@@ -36,8 +36,7 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
           id,
           content,
           created_at,
-          sender_id,
-          profiles:sender_id(display_name, avatar_url)
+          sender_id
         `)
         .eq('conversation_id', chat.conversation_id)
         .order('created_at', { ascending: true });
@@ -47,15 +46,31 @@ export const ChatArea = ({ chat }: ChatAreaProps) => {
         return [];
       }
 
+      // Get profiles for all unique sender IDs
+      const senderIds = [...new Set(data.map(msg => msg.sender_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+        .in('id', senderIds);
+
+      // Create a map of sender_id to profile
+      const profileMap = new Map();
+      profiles?.forEach(profile => {
+        profileMap.set(profile.id, profile);
+      });
+
       // Transform data to match Message interface
-      const transformedMessages: Message[] = data.map((msg) => ({
-        id: msg.id,
-        text: msg.content,
-        timestamp: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isOwn: msg.sender_id === user.id,
-        avatar: msg.profiles?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face',
-        sender_id: msg.sender_id
-      }));
+      const transformedMessages: Message[] = data.map((msg) => {
+        const profile = profileMap.get(msg.sender_id);
+        return {
+          id: msg.id,
+          text: msg.content,
+          timestamp: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isOwn: msg.sender_id === user.id,
+          avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face',
+          sender_id: msg.sender_id
+        };
+      });
 
       return transformedMessages;
     },

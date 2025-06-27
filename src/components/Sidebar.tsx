@@ -1,12 +1,11 @@
 
 import { useState } from "react";
-import { Search, Settings, Plus, MessageCircle, LogOut, User } from "lucide-react";
+import { Search, Settings, Plus, MessageCircle, LogOut } from "lucide-react";
 import { Chat } from "@/pages/Index";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useQuery } from "@tanstack/react-query";
+import { ProfileMenu } from "@/components/ProfileMenu";
 
 interface SidebarProps {
   chats: Chat[];
@@ -16,29 +15,7 @@ interface SidebarProps {
 
 export const Sidebar = ({ chats, selectedChat, onSelectChat }: SidebarProps) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const { user, signOut } = useAuth();
-
-  // Fetch user profile
-  const { data: profile } = useQuery({
-    queryKey: ['profile', user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        return null;
-      }
-
-      return data;
-    },
-    enabled: !!user,
-  });
+  const { signOut } = useAuth();
 
   const filteredChats = chats.filter(chat =>
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -146,25 +123,10 @@ export const Sidebar = ({ chats, selectedChat, onSelectChat }: SidebarProps) => 
         )}
       </div>
 
-      {/* User Profile Section */}
+      {/* User Profile Section with Menu */}
       <div className="p-4 border-t border-slate-700">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <img
-              src={profile?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face'}
-              alt={profile?.display_name || 'User'}
-              className="w-10 h-10 rounded-full object-cover"
-            />
-            <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-slate-800 rounded-full"></div>
-          </div>
-          
-          <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-white truncate">
-              {profile?.display_name || 'Loading...'}
-            </h3>
-            <p className="text-xs text-slate-400 truncate">Online</p>
-          </div>
-          
+        <div className="flex items-center justify-between">
+          <ProfileMenu />
           <button
             onClick={handleSignOut}
             className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white"
