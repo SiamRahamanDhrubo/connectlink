@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,7 +42,8 @@ export const Auth = () => {
           navigate("/");
         }
       } else {
-        const { data, error } = await supabase.auth.signUp({
+        // Sign up the user
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -54,15 +54,25 @@ export const Auth = () => {
           }
         });
         
-        if (error) throw error;
+        if (signUpError) throw signUpError;
         
-        if (data.user) {
-          toast.success(`Welcome! Your UID is: ${data.user.id}`);
-          // Show the user their UID
-          setTimeout(() => {
-            toast.info(`Your unique ID: ${data.user.id}`, { duration: 10000 });
-          }, 1000);
-          navigate("/");
+        if (signUpData.user) {
+          toast.success(`Welcome! Your UID is: ${signUpData.user.id}`);
+          
+          // Automatically sign in the user after successful registration
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          
+          if (signInError) {
+            console.error("Auto sign-in error:", signInError);
+            toast.info("Registration successful! Please sign in.");
+            setIsLogin(true); // Switch to login mode
+          } else if (signInData.user) {
+            toast.success("Automatically signed in!");
+            navigate("/");
+          }
         }
       }
     } catch (error: any) {
