@@ -6,6 +6,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Chat, Message } from "@/pages/Index";
 import { CallModal } from "@/components/CallModal";
 import { MobileChatHeader } from "@/components/MobileChatHeader";
+import { FileUpload } from "@/components/FileUpload";
+import { FilePreview } from "@/components/FilePreview";
 
 interface ChatAreaProps {
   chat: Chat;
@@ -17,6 +19,7 @@ export const ChatArea = ({ chat, onBack, isMobile = false }: ChatAreaProps) => {
   const [newMessage, setNewMessage] = useState("");
   const [showCallModal, setShowCallModal] = useState(false);
   const [callType, setCallType] = useState<"voice" | "video">("voice");
+  const [selectedFile, setSelectedFile] = useState<{ file: File; type: 'image' | 'file' } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -118,17 +121,22 @@ export const ChatArea = ({ chat, onBack, isMobile = false }: ChatAreaProps) => {
 
   // Send message mutation
   const sendMessageMutation = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async ({ content, fileData }: { content: string; fileData?: { name: string; type: string; data: string } }) => {
       if (!user) throw new Error('User not authenticated');
       
       console.log('Sending message to conversation:', chat.conversation_id);
+      
+      let messageContent = content;
+      if (fileData) {
+        messageContent = `${content}\n[File: ${fileData.name}]`;
+      }
       
       const { data, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: chat.conversation_id,
           sender_id: user.id,
-          content: content
+          content: messageContent
         })
         .select()
         .single();
@@ -150,12 +158,44 @@ export const ChatArea = ({ chat, onBack, isMobile = false }: ChatAreaProps) => {
     }
   });
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newMessage.trim() && user) {
-      sendMessageMutation.mutate(newMessage.trim());
-      setNewMessage("");
+    if (!user) return;
+
+    const messageText = newMessage.trim();
+    if (!messageText && !selectedFile) return;
+
+    let fileData = null;
+    if (selectedFile) {
+      // Convert file to base64 for simple storage in message content
+      const reader = new FileReader();
+      const fileContent = await new Promise<string>((resolve) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(selectedFile.file);
+      });
+      
+      fileData = {
+        name: selectedFile.file.name,
+        type: selectedFile.file.type,
+        data: fileContent
+      };
     }
+
+    sendMessageMutation.mutate({ 
+      content: messageText || `Sent a ${selectedFile?.type || 'file'}`, 
+      fileData 
+    });
+    
+    setNewMessage("");
+    setSelectedFile(null);
+  };
+
+  const handleFileSelect = (file: File, type: 'image' | 'file') => {
+    setSelectedFile({ file, type });
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
   };
 
   const handleVoiceCall = () => {
@@ -278,9 +318,26 @@ export const ChatArea = ({ chat, onBack, isMobile = false }: ChatAreaProps) => {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* File Preview */}
+        {selectedFile && (
+          <div className="p-4 border-t border-slate-700 bg-slate-750">
+            <div className="mb-2">
+              <FilePreview
+                file={selectedFile.file}
+                type={selectedFile.type}
+                onRemove={handleRemoveFile}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Message Input */}
         <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-700">
           <div className="flex items-center gap-3">
+            <FileUpload
+              onFileSelect={handleFileSelect}
+              disabled={sendMessageMutation.isPending}
+            />
             <input
               type="text"
               value={newMessage}
@@ -291,7 +348,7 @@ export const ChatArea = ({ chat, onBack, isMobile = false }: ChatAreaProps) => {
             />
             <button
               type="submit"
-              disabled={!newMessage.trim() || sendMessageMutation.isPending}
+              disabled={(!newMessage.trim() && !selectedFile) || sendMessageMutation.isPending}
               className="bg-blue-500 hover:bg-blue-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white p-2 rounded-full transition-colors"
             >
               <Send className="w-5 h-5" />
