@@ -122,20 +122,20 @@ export const Auth = () => {
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 md:mb-8">
           <div className="flex items-center justify-center mb-4">
-            <MessageCircle className="w-12 h-12 text-blue-400 mr-2" />
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            <MessageCircle className="w-10 h-10 md:w-12 md:h-12 text-blue-400 mr-2" />
+            <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
               ConnectLink
             </h1>
           </div>
-          <p className="text-slate-400">
+          <p className="text-slate-400 text-sm md:text-base">
             {isLogin ? "Welcome back!" : "Create your account"}
           </p>
         </div>
 
-        <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700">
-          <form onSubmit={handleEmailAuth} className="space-y-6">
+        <div className="bg-slate-800 rounded-2xl p-6 md:p-8 border border-slate-700">
+          <form onSubmit={handleEmailAuth} className="space-y-4 md:space-y-6">
             {!isLogin && (
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -147,7 +147,7 @@ export const Auth = () => {
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-slate-400"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-slate-400 text-sm md:text-base"
                     placeholder="Your display name"
                   />
                 </div>
@@ -165,7 +165,7 @@ export const Auth = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full pl-11 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-slate-400"
+                  className="w-full pl-11 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-slate-400 text-sm md:text-base"
                   placeholder="your@email.com"
                 />
               </div>
@@ -182,7 +182,7 @@ export const Auth = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full pl-11 pr-11 py-3 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-slate-400"
+                  className="w-full pl-11 pr-11 py-3 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-slate-400 text-sm md:text-base"
                   placeholder="••••••••"
                 />
                 <button
@@ -198,13 +198,13 @@ export const Auth = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base touch-manipulation"
             >
               {loading ? "Please wait..." : (isLogin ? "Sign In" : "Sign Up")}
             </button>
           </form>
 
-          <div className="mt-6">
+          <div className="mt-4 md:mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-slate-600"></div>
@@ -214,11 +214,11 @@ export const Auth = () => {
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-3">
+            <div className="mt-4 md:mt-6 grid grid-cols-2 gap-3">
               <button
                 onClick={handleGoogleLogin}
                 disabled={loading}
-                className="w-full inline-flex justify-center py-3 px-4 border border-slate-600 rounded-lg bg-slate-700 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors disabled:opacity-50"
+                className="w-full inline-flex justify-center py-3 px-4 border border-slate-600 rounded-lg bg-slate-700 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors disabled:opacity-50 touch-manipulation"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -232,7 +232,7 @@ export const Auth = () => {
               <button
                 onClick={handleGithubLogin}
                 disabled={loading}
-                className="w-full inline-flex justify-center py-3 px-4 border border-slate-600 rounded-lg bg-slate-700 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors disabled:opacity-50"
+                className="w-full inline-flex justify-center py-3 px-4 border border-slate-600 rounded-lg bg-slate-700 text-sm font-medium text-slate-300 hover:bg-slate-600 transition-colors disabled:opacity-50 touch-manipulation"
               >
                 <Github className="w-5 h-5" />
                 <span className="ml-2">GitHub</span>
@@ -240,10 +240,10 @@ export const Auth = () => {
             </div>
           </div>
 
-          <div className="mt-6 text-center">
+          <div className="mt-4 md:mt-6 text-center">
             <button
               onClick={() => setIsLogin(!isLogin)}
-              className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+              className="text-blue-400 hover:text-blue-300 text-sm font-medium touch-manipulation"
             >
               {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
             </button>

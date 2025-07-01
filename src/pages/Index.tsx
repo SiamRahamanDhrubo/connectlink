@@ -32,6 +32,7 @@ const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [showSidebar, setShowSidebar] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -115,6 +116,16 @@ const Index = () => {
     enabled: !!user,
   });
 
+  const handleSelectChat = (chat: Chat) => {
+    setSelectedChat(chat);
+    setShowSidebar(false); // Close sidebar on mobile when chat is selected
+  };
+
+  const handleBackToChats = () => {
+    setSelectedChat(null);
+    setShowSidebar(true); // Show sidebar when going back to chat list
+  };
+
   if (loading || conversationsLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-900 text-white">
@@ -132,17 +143,42 @@ const Index = () => {
 
   return (
     <div className="h-screen flex bg-slate-900 text-white overflow-hidden">
-      <Sidebar 
-        chats={conversations}
-        selectedChat={selectedChat}
-        onSelectChat={setSelectedChat}
-      />
-      <div className="flex-1 flex flex-col">
-        {selectedChat ? (
-          <ChatArea chat={selectedChat} />
+      {/* Mobile Layout */}
+      <div className="md:hidden w-full flex flex-col">
+        {!selectedChat ? (
+          <Sidebar 
+            chats={conversations}
+            selectedChat={selectedChat}
+            onSelectChat={handleSelectChat}
+            isMobile={true}
+          />
         ) : (
-          <WelcomeScreen />
+          <ChatArea 
+            chat={selectedChat} 
+            onBack={handleBackToChats}
+            isMobile={true}
+          />
         )}
+      </div>
+
+      {/* Desktop Layout */}
+      <div className="hidden md:flex w-full">
+        <Sidebar 
+          chats={conversations}
+          selectedChat={selectedChat}
+          onSelectChat={setSelectedChat}
+          isMobile={false}
+        />
+        <div className="flex-1 flex flex-col">
+          {selectedChat ? (
+            <ChatArea 
+              chat={selectedChat} 
+              isMobile={false}
+            />
+          ) : (
+            <WelcomeScreen />
+          )}
+        </div>
       </div>
     </div>
   );

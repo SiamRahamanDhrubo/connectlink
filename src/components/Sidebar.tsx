@@ -1,5 +1,6 @@
+
 import { useState } from "react";
-import { Search, Settings, Plus, MessageCircle, LogOut } from "lucide-react";
+import { Search, Settings, Plus, MessageCircle, LogOut, ArrowLeft } from "lucide-react";
 import { Chat } from "@/pages/Index";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,9 +13,10 @@ interface SidebarProps {
   chats: Chat[];
   selectedChat: Chat | null;
   onSelectChat: (chat: Chat) => void;
+  isMobile?: boolean;
 }
 
-export const Sidebar = ({ chats, selectedChat, onSelectChat }: SidebarProps) => {
+export const Sidebar = ({ chats, selectedChat, onSelectChat, isMobile = false }: SidebarProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -43,7 +45,10 @@ export const Sidebar = ({ chats, selectedChat, onSelectChat }: SidebarProps) => 
 
   return (
     <>
-      <div className="w-80 bg-slate-800 border-r border-slate-700 flex flex-col">
+      <div className={cn(
+        "bg-slate-800 border-r border-slate-700 flex flex-col",
+        isMobile ? "w-full h-full" : "w-80"
+      )}>
         {/* Header */}
         <div className="p-4 border-b border-slate-700">
           <div className="flex items-center justify-between mb-4">
@@ -79,7 +84,7 @@ export const Sidebar = ({ chats, selectedChat, onSelectChat }: SidebarProps) => 
               placeholder="Search conversations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
           </div>
         </div>
@@ -98,8 +103,9 @@ export const Sidebar = ({ chats, selectedChat, onSelectChat }: SidebarProps) => 
                 key={chat.id}
                 onClick={() => onSelectChat(chat)}
                 className={cn(
-                  "p-4 border-b border-slate-700 cursor-pointer transition-all duration-200 hover:bg-slate-700",
-                  selectedChat?.id === chat.id && "bg-slate-700 border-l-4 border-l-blue-500"
+                  "p-4 border-b border-slate-700 cursor-pointer transition-all duration-200 hover:bg-slate-700 active:bg-slate-600",
+                  selectedChat?.id === chat.id && "bg-slate-700 border-l-4 border-l-blue-500",
+                  isMobile && "touch-manipulation"
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -107,20 +113,26 @@ export const Sidebar = ({ chats, selectedChat, onSelectChat }: SidebarProps) => 
                     <img
                       src={chat.avatar}
                       alt={chat.name}
-                      className="w-12 h-12 rounded-full object-cover"
+                      className={cn(
+                        "rounded-full object-cover",
+                        isMobile ? "w-10 h-10" : "w-12 h-12"
+                      )}
                     />
                     {chat.isOnline && (
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-slate-800 rounded-full"></div>
+                      <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-slate-800 rounded-full"></div>
                     )}
                   </div>
                   
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-semibold text-white truncate">{chat.name}</h3>
+                      <h3 className={cn(
+                        "font-semibold text-white truncate",
+                        isMobile ? "text-sm" : "text-base"
+                      )}>{chat.name}</h3>
                       <span className="text-xs text-slate-400">{chat.timestamp}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <p className="text-sm text-slate-400 truncate">{chat.lastMessage}</p>
+                      <p className="text-xs text-slate-400 truncate">{chat.lastMessage}</p>
                       {chat.unread > 0 && (
                         <span className="ml-2 px-2 py-1 text-xs bg-blue-500 text-white rounded-full min-w-[20px] flex items-center justify-center">
                           {chat.unread}
